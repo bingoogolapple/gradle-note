@@ -1,0 +1,78 @@
+apply plugin: 'java'
+
+version gnVersion
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+task first << {
+    println "first"
+}
+task second << {
+    println "second"
+}
+
+second.finalizedBy first
+
+task printVersion(group : "versioning", description : "print version", dependsOn: [second, first]) {
+    doFirst {
+        println "Before reading the project version"
+    }
+
+    doLast {
+        println "Version: $version"
+        logger.error "error Version: $version"
+        logger.quiet "quiet Version: $version"
+    }
+}
+
+printVersion.enabled = false
+
+printVersion.doFirst {
+    println "First Action"
+}
+printVersion.doLast {
+    println "Last Action"
+}
+
+task third << {
+    println "third"
+}
+third.dependsOn('printVersion')
+
+version = new ProjectVersion(0, 1, true)
+class ProjectVersion {
+    Integer major
+    Integer minor
+    Boolean release
+
+    ProjectVersion(Integer major, Integer minor) {
+        this.major = major
+        this.minor = minor
+        this.release = Boolean.FALSE
+    }
+
+    ProjectVersion(Integer major, Integer minor, Boolean release) {
+        this(major, minor)
+        this.release = release
+    }
+
+    @Override
+    String toString() {
+        "$major.$minor${release ? '' : '-SNAPSHOT'}"
+    }
+}
+
+task printProjectVersion {
+    println "printProjectVersion1"
+    doFirst {
+        println version
+    }
+    println "printProjectVersion2"
+}

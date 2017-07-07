@@ -1,0 +1,14 @@
+buildscript {
+    ext {
+        gnVersion = '1.0.0'
+    }
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    repositories {
+        mavenCentral()
+    }
+}
