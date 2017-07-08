@@ -57,3 +57,13 @@ task printVersion {
     }
     println '配置阶段执行的代码 printVersion2'
 }
+
+task makeReleaseVersion(group: 'versioning', description: 'Makes project a release version') {
+    doLast {
+        version.release = true
+        ant.propertyfile(file: versionFile) {
+            entry(key: 'release', type: 'string', operation: '=', value: 'true')
+        }
+        println '制作发布版本'
+    }
+}
