@@ -1,0 +1,42 @@
+task first << {
+    println "任务一 doLast"
+}
+task second << {
+    println "任务二 doLast"
+}
+
+// 如果不指定 group，执行 gradle tasks 时是不会输出该 task 的，输出的时候分组名的第一个首字母会自动变成大写的
+// 这里 dependsOn 依赖的 first 和 second 是无序的，引号可加可不加，实际上是按 task 的名字从小到大排序
+task printVersion(group : "versioning", description : "打印版本的描述", dependsOn: ['second', first]) {
+    doFirst {
+        println "打印版本 doFirst 2"
+    }
+
+    doLast {
+        println "打印版本 doLast 3 Version: $version"
+        // Gradle 提供了一个基于 SLF4J 日志库的 logger 实现
+        logger.error "error Version: $version"
+        logger.quiet "quiet Version: $version"
+    }
+}
+
+// 在动作列表的最开始添加 doFirst 闭包
+printVersion.doFirst {
+    println "打印版本 doFirst 1"
+}
+// 在动作列表的最后添加 doLast 闭包
+printVersion.doLast {
+    println "打印版本 doLast 4"
+}
+
+task third << {
+    println "任务三"
+}
+// printVersion 任务前后的引号可加可不加
+third.dependsOn('printVersion')
+
+// 通过 finalizedBy 来指定 first 作为 second 的终结器任务，first 会在 second 之后执行，first 可以用来清理 second 中的资源
+second.finalizedBy first
+
+// 禁用 printVersion，即使禁用了 printVersion 后 printVersion 不会执行，但执行 gradle third 时 printVersion 依赖的 first 和 second 还是会执行
+printVersion.enabled = false

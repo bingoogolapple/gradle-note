@@ -1,0 +1,17 @@
+tasks.addRule("Pattern: increment<Classifier>Version - Increments the project version classifier.") { String taskName ->
+    if (taskName.startsWith('increment') && taskName.endsWith('Version')) {
+        task(taskName) << {
+            String classifier = (taskName - 'increment' - 'Version').toLowerCase()
+            switch (classifier) {
+                case 'major':
+                    println "classifier is major"
+                    break
+                case 'minor':
+                    println "classifier is minor"
+                    break
+                default:
+                    throw  new GradleException("Invalid version type $classifier. Allowed types: ['Major', 'Minor']")
+            }
+        }
+    }
+}
