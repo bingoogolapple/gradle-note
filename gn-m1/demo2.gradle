@@ -58,9 +58,18 @@ task printVersion {
     println '配置阶段执行的代码 printVersion2'
 }
 
+// 如果没有手动修改属性文件中的 release 属性，多次执行 gradle makeReleaseVersion 时，makeReleaseVersion 只会执行一次，将被标记为最新的，永远会被跳过执行
 task makeReleaseVersion(group: 'versioning', description: 'Makes project a release version') {
+    // 在配置阶段声明 inputs/outputs，在配置阶段执行的，用来连接 task 依赖
+
+    // 声明版本的 release 属性作为输入
+    inputs.property('release', version.release)
+    // 由于版本文件被修改了，所以它被声明作为输出文件属性
+    outputs.file versionFile
+
     doLast {
         version.release = true
+        // Ant task 的 propertyfile 提供了一种便利的方式来修改属性文件
         ant.propertyfile(file: versionFile) {
             entry(key: 'release', type: 'string', operation: '=', value: 'true')
         }
