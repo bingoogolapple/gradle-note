@@ -1,0 +1,93 @@
+// 1.这里先使用了 2 那里创建的 ProjectVersion 类
+//version = new ProjectVersion(0, 1, true)
+// 2
+class ProjectVersion {
+    Integer major
+    Integer minor
+    Boolean release
+
+    ProjectVersion(Integer major, Integer minor) {
+        this.major = major
+        this.minor = minor
+        this.release = Boolean.FALSE
+    }
+
+    ProjectVersion(Integer major, Integer minor, Boolean release) {
+        this(major, minor)
+        this.release = release
+    }
+
+    @Override
+    String toString() {
+        "$major.$minor${release ? '' : '-SNAPSHOT'}"
+    }
+}
+
+// Gradle 构建生命周期阶段 初始化阶段->配置阶段->执行阶段。没有定义动作或者使用左移操作符的部分，Gradle 称之为 task 配置
+// 注意：项目每一次构建的的时候任何配置代码都会被执行，即使你只执行 gradle tasks
+
+// Project 接口提供了 file 方法；它会创建一个相对于项目目录的 java.io.File 实例
+ext.versionFile = file('version.properties')
+
+// 没使用左移操作符定义 task 配置
+task loadVersion {
+    println "配置阶段执行的代码 loadVersion"
+    project.version = readVersion()
+}
+
+ProjectVersion readVersion() {
+    logger.quiet 'Reading the version file'
+
+    if (!versionFile.exists()) {
+        throw new GradleException("Required version file does not exist: $versionFile.canonicalPath")
+    }
+    Properties versionProps = new Properties()
+    versionFile.withInputStream { stream ->
+        versionProps.load(stream)
+    }
+
+    // 在 Groovy 中，如果 return 是方法中最后一条语句的话，则可以将它省略
+    new ProjectVersion(versionProps.major.toInteger(), versionProps.minor.toInteger(), versionProps.release.toBoolean())
+}
+
+task printVersion {
+    println "配置阶段执行的代码 printVersion1"
+    doFirst {
+        println "执行阶段执行的代码 打印版本 $version"
+    }
+    println '配置阶段执行的代码 printVersion2'
+}
+
+// task 规则不能像处理任何其他的简单的 task 或增强的 task 一样被独立分组。task 规则即使通过插件声明了，它也将永远显示在 Rules 组下
+// 需要 cd 到特定模块的目录下执行 gradle tasks 或者 gradle gn-m1:tasks 才能看见对应模块下的 task 规则
+// 添加带有描述信息的 task 规则
+tasks.addRule("Pattern: increment<Classifier>Version - Increments the project version classifier.") { String taskName ->
+    // 根据预定义模式检查 task 名称
+    if (taskName.startsWith('increment') && taskName.endsWith('Version')) {
+        // 给符合命名模式的 task 动态添加一个 doLast 方法
+        task(taskName) << {
+            // 从完整的 task 名称中提取类型字符串
+            String classifier = (taskName - 'increment' - 'Version').toLowerCase()
+            String currentVersion = version.toString()
+            switch (classifier) {
+                case 'major':
+                    println "classifier is major"
+                    ++version.major
+                    break
+                case 'minor':
+                    println "classifier is minor"
+                    ++version.minor
+                    break
+                default:
+                    throw  new GradleException("Invalid version type $classifier. Allowed types: ['Major', 'Minor']")
+            }
+
+            String newVersion = version.toString()
+            logger.quiet "Incrementing $classifier project version: $currentVersion -> $newVersion"
+
+            ant.propertyfile(file: versionFile) {
+                entry(key: classifier, type: 'int', operation: '+', value: 1)
+            }
+        }
+    }
+}
