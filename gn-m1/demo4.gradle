@@ -1,0 +1,116 @@
+// 1.这里先使用了 2 那里创建的 ProjectVersion 类
+//version = new ProjectVersion(0, 1, true)
+// 2
+class ProjectVersion {
+    Integer major
+    Integer minor
+    Boolean release
+
+    ProjectVersion(Integer major, Integer minor) {
+        this.major = major
+        this.minor = minor
+        this.release = Boolean.FALSE
+    }
+
+    ProjectVersion(Integer major, Integer minor, Boolean release) {
+        this(major, minor)
+        this.release = release
+    }
+
+    @Override
+    String toString() {
+        "$major.$minor${release ? '' : '-SNAPSHOT'}"
+    }
+}
+
+// Gradle 构建生命周期阶段 初始化阶段->配置阶段->执行阶段。没有定义动作或者使用左移操作符的部分，Gradle 称之为 task 配置
+// 注意：项目每一次构建的的时候任何配置代码都会被执行，即使你只执行 gradle tasks
+
+// Project 接口提供了 file 方法；它会创建一个相对于项目目录的 java.io.File 实例
+ext.versionFile = file('version.properties')
+
+// 没使用左移操作符定义 task 配置
+task loadVersion {
+    println "配置阶段执行的代码 loadVersion"
+    project.version = readVersion()
+}
+
+ProjectVersion readVersion() {
+    logger.quiet 'Reading the version file'
+
+    if (!versionFile.exists()) {
+        throw new GradleException("Required version file does not exist: $versionFile.canonicalPath")
+    }
+    Properties versionProps = new Properties()
+    versionFile.withInputStream { stream ->
+        versionProps.load(stream)
+    }
+
+    // 在 Groovy 中，如果 return 是方法中最后一条语句的话，则可以将它省略
+    new ProjectVersion(versionProps.major.toInteger(), versionProps.minor.toInteger(), versionProps.release.toBoolean())
+}
+
+task printVersion {
+    println "配置阶段执行的代码 printVersion1"
+    doFirst {
+        println "执行阶段执行的代码 打印版本 $version"
+    }
+    println '配置阶段执行的代码 printVersion2'
+}
+
+class ReleaseVersionTask extends DefaultTask {
+    // Input 注解会在配置阶段验证属性值，如果值为 null，Gradle 会抛出 TaskValidationException 异常。为了允许输入为 null 值，我们需要给它添加 Optional 注解
+    @Input
+    Boolean release
+    @Input
+    File destFile
+
+    ReleaseVersionTask() {
+        group = 'versioning'
+        description = 'Makes project a release version'
+    }
+
+    @TaskAction
+    void start() {
+        project.version.release = true
+        ant.propertyfile(file: destFile) {
+            entry(key: 'release', type: 'string', operation: '=', value: 'true')
+        }
+        println '制作发布版本'
+    }
+}
+
+// 定义一个增强的 ReleaseVersionTask 类型的任务，与简单的任务相比，一个巨大优势在于所暴露的属性可以被单独赋值
+task makeReleaseVersion(type: ReleaseVersionTask) {
+    release = version.release
+    destFile = versionFile
+}
+
+task createDistribution(type: Zip, dependsOn: makeReleaseVersion) {
+    // 打包后的 zip 文件默认是在 $buildDir/distributions 目录下的，可以通过修改 destinationDir 来重新指定
+//    destinationDir = new File(projectDir, "customdest")
+    destinationDir = new File(buildDir, "customdest")
+    // task 依赖推断，通过使用一个 task 的输出作为另一个 task 的输入，Gradle 就可以推断出依赖关系，所依赖的 task 会自动运行
+    // 隐式引用 War 任务的输出，war 包会被放到 zip 文件的根目录下
+    from war.outputs.files
+
+    // 把所有源文件都放到 zip 文件的 src 目录下
+    from(sourceSets*.allSource) {
+        into 'src'
+    }
+
+    // 将版本文件 version.properties 添加到 zip 文件的根目录
+    from(projectDir) {
+        include versionFile.name
+    }
+}
+
+task backupReleaseDistribution(type: Copy) {
+    // 隐式引用 createDistribution 任务的输出
+    from createDistribution.outputs.files
+    into "$buildDir/backup"
+}
+
+task customRelease(dependsOn: backupReleaseDistribution) {
+    logger.quiet "Releasing the project $project.name"
+}
