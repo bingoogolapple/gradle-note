@@ -114,3 +114,5 @@ task backupReleaseDistribution(type: Copy) {
 task customRelease(dependsOn: backupReleaseDistribution) {
     logger.quiet "Releasing the project $project.name"
 }
+
+// makeReleaseVersion -> war -> createDistribution -> backupReleaseDistribution -> customRelease
