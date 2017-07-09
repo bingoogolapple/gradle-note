@@ -1,0 +1,125 @@
+// 1.这里先使用了 2 那里创建的 ProjectVersion 类
+//version = new ProjectVersion(0, 1, true)
+// 2
+class ProjectVersion {
+    Integer major
+    Integer minor
+    Boolean release
+
+    ProjectVersion(Integer major, Integer minor) {
+        this.major = major
+        this.minor = minor
+        this.release = Boolean.FALSE
+    }
+
+    ProjectVersion(Integer major, Integer minor, Boolean release) {
+        this(major, minor)
+        this.release = release
+    }
+
+    @Override
+    String toString() {
+        "$major.$minor${release ? '' : '-SNAPSHOT'}"
+    }
+}
+
+// Gradle 构建生命周期阶段 初始化阶段->配置阶段->执行阶段。没有定义动作或者使用左移操作符的部分，Gradle 称之为 task 配置
+// 注意：项目每一次构建的的时候任何配置代码都会被执行，即使你只执行 gradle tasks
+
+// Project 接口提供了 file 方法；它会创建一个相对于项目目录的 java.io.File 实例
+ext.versionFile = file('version.properties')
+
+// 没使用左移操作符定义 task 配置
+task loadVersion {
+    println "配置阶段执行的代码 loadVersion"
+    project.version = readVersion()
+}
+
+ProjectVersion readVersion() {
+    logger.quiet 'Reading the version file'
+
+    if (!versionFile.exists()) {
+        throw new GradleException("Required version file does not exist: $versionFile.canonicalPath")
+    }
+    Properties versionProps = new Properties()
+    versionFile.withInputStream { stream ->
+        versionProps.load(stream)
+    }
+
+    // 在 Groovy 中，如果 return 是方法中最后一条语句的话，则可以将它省略
+    new ProjectVersion(versionProps.major.toInteger(), versionProps.minor.toInteger(), versionProps.release.toBoolean())
+}
+
+task printVersion {
+    println "配置阶段执行的代码 printVersion1"
+    doFirst {
+        println "执行阶段执行的代码 打印版本 $version"
+    }
+    println '配置阶段执行的代码 printVersion2'
+}
+
+task createDistribution(type: Zip) {
+    // 打包后的 zip 文件默认是在 $buildDir/distributions 目录下的，可以通过修改 destinationDir 来重新指定
+//    destinationDir = new File(projectDir, "customdest")
+    destinationDir = new File(buildDir, "customdest")
+    // task 依赖推断，通过使用一个 task 的输出作为另一个 task 的输入，Gradle 就可以推断出依赖关系，所依赖的 task 会自动运行
+    // 隐式引用 War 任务的输出，war 包会被放到 zip 文件的根目录下
+    from war.outputs.files
+
+    // 把所有源文件都放到 zip 文件的 src 目录下
+    from(sourceSets*.allSource) {
+        into 'src'
+    }
+
+    // 将版本文件 version.properties 添加到 zip 文件的根目录
+    from(projectDir) {
+        include versionFile.name
+    }
+}
+
+task backupReleaseDistribution(type: Copy) {
+    // 隐式引用 createDistribution 任务的输出
+    from createDistribution.outputs.files
+    into "$buildDir/backup"
+}
+
+task customRelease(dependsOn: backupReleaseDistribution) {
+    logger.quiet "Releasing the project $project.name"
+    doFirst {
+        println 'customRelease doFirst'
+    }
+}
+
+// 如果通过监听器添加到构建脚本中，就不能直接访问 Project 实例了，需要充分的使用 Gradle 的 API
+class ReleaseVersionListener implements TaskExecutionGraphListener {
+    static final String releaseTaskPath = ':gn-m1:customRelease'
+
+    @Override
+    void graphPopulated(TaskExecutionGraph taskGraph) {
+        if (taskGraph.hasTask(releaseTaskPath)) {
+            println '有 customRelease 任务'
+            List<Task> allTasks = taskGraph.allTasks
+            Task releaseTask = allTasks.find {
+                it.path == releaseTaskPath
+            }
+            Project project = releaseTask.project
+
+            if (!project.version.release) {
+                println '制作发布版本'
+                project.version.release = true
+                project.ant.propertyfile(file: project.versionFile) {
+                    entry(key: 'release', type: 'string', operation: '=', value: 'true')
+                }
+            } else {
+                println '已经是发布版本了'
+            }
+        } else {
+            println '没有 customRelease 任务'
+        }
+    }
+}
+
+def releaseVersionListener = new ReleaseVersionListener()
+gradle.taskGraph.addTaskExecutionGraphListener(releaseVersionListener)
+
+// war -> createDistribution -> backupReleaseDistribution -> customRelease

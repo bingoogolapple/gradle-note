@@ -58,36 +58,54 @@ task printVersion {
     println '配置阶段执行的代码 printVersion2'
 }
 
-// task 规则不能像处理任何其他的简单的 task 或增强的 task 一样被独立分组。task 规则即使通过插件声明了，它也将永远显示在 Rules 组下
-// 需要 cd 到特定模块的目录下执行 gradle tasks 或者 gradle gn-m1:tasks 才能看见对应模块下的 task 规则
-// 添加带有描述信息的 task 规则
-tasks.addRule("Pattern: increment<Classifier>Version - Increments the project version classifier.") { String taskName ->
-    // 根据预定义模式检查 task 名称
-    if (taskName.startsWith('increment') && taskName.endsWith('Version')) {
-        // 给符合命名模式的 task 动态添加一个 doLast 方法
-        task(taskName) << {
-            // 从完整的 task 名称中提取类型字符串
-            String classifier = (taskName - 'increment' - 'Version').toLowerCase()
-            String currentVersion = version.toString()
-            switch (classifier) {
-                case 'major':
-                    println "classifier is major"
-                    ++version.major
-                    break
-                case 'minor':
-                    println "classifier is minor"
-                    ++version.minor
-                    break
-                default:
-                    throw new GradleException("Invalid version type $classifier. Allowed types: ['Major', 'Minor']")
-            }
+task createDistribution(type: Zip) {
+    // 打包后的 zip 文件默认是在 $buildDir/distributions 目录下的，可以通过修改 destinationDir 来重新指定
+//    destinationDir = new File(projectDir, "customdest")
+    destinationDir = new File(buildDir, "customdest")
+    // task 依赖推断，通过使用一个 task 的输出作为另一个 task 的输入，Gradle 就可以推断出依赖关系，所依赖的 task 会自动运行
+    // 隐式引用 War 任务的输出，war 包会被放到 zip 文件的根目录下
+    from war.outputs.files
 
-            String newVersion = version.toString()
-            logger.quiet "Incrementing $classifier project version: $currentVersion -> $newVersion"
+    // 把所有源文件都放到 zip 文件的 src 目录下
+    from(sourceSets*.allSource) {
+        into 'src'
+    }
 
-            ant.propertyfile(file: versionFile) {
-                entry(key: classifier, type: 'int', operation: '+', value: 1)
-            }
-        }
+    // 将版本文件 version.properties 添加到 zip 文件的根目录
+    from(projectDir) {
+        include versionFile.name
     }
 }
+
+task backupReleaseDistribution(type: Copy) {
+    // 隐式引用 createDistribution 任务的输出
+    from createDistribution.outputs.files
+    into "$buildDir/backup"
+}
+
+task customRelease(dependsOn: backupReleaseDistribution) {
+    logger.quiet "Releasing the project $project.name"
+    doFirst {
+        println 'customRelease doFirst'
+    }
+}
+
+// task 图生成完成后将立即被执行
+gradle.taskGraph.whenReady { TaskExecutionGraph taskGraph ->
+    if (taskGraph.hasTask(customRelease)) {
+        println '有 customRelease 任务'
+        if (!version.release) {
+            println '制作发布版本'
+            version.release = true
+            ant.propertyfile(file: versionFile) {
+                entry(key: 'release', type: 'string', operation: '=', value: 'true')
+            }
+        } else {
+            println '已经是发布版本了'
+        }
+    } else {
+        println '没有 customRelease 任务'
+    }
+}
+
+// war -> createDistribution -> backupReleaseDistribution -> customRelease
