@@ -1,0 +1,17 @@
+apply plugin: 'java'
+
+version gnVersion
+
+sourceCompatibility = 1.8
+
+// gradle build
+// java -cp build/classes/java/main cn.bingoogolapple.gradle.todo.ToDoApp
+// java -cp build/libs/j2se-1.0.0.jar cn.bingoogolapple.gradle.todo.ToDoApp
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'cn.bingoogolapple.gradle.todo.ToDoApp'
+    }
+}
+// gradle build
+// java -jar build/libs/j2se-1.0.0.jar
