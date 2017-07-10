@@ -1,0 +1,43 @@
+task startSession << {
+    callMethod()
+}
+
+def callMethod() {
+    ant.echo(message: 'Repeat after me...')
+}
+
+3.times {
+    task "yayGradle$it" << {
+        println "Gradle rocks $it"
+    }
+}
+
+yayGradle0.dependsOn startSession
+yayGradle2.dependsOn yayGradle1, yayGradle0
+task groupTherapy(dependsOn: yayGradle2)
+
+// 显示项目中所有可运行的 task
+// gradle -q tasks
+// gradle -q tasks --all
+// -P 「--project-prop」项目参数是构建脚本中可用的变量。可以使用这个选项直接向构建脚本中传入参数（比如，-Pmyprop=myvalue）
+
+// 显示项目中所有可用的属性
+// gradle properties
+
+// gradle groupTherapy
+
+// 任务名字缩写，以驼峰shi的缩写在命令上运行任务
+// gradle yG0
+// gradle gT
+
+// 通过 -x 来在执行时排除一个任务
+// gradle gT -x yG0
+// gradle groupTherapy -x yayGradle0
+
+
+// 使用守护进程，守护进程只会被创建一次，守护进程会在3小时空闲时间之后自动过期
+// gradle groupTherapy --daemon
+// 不使用守护进程
+// gradle groupTherapy --no-daemon
+// 停止守护进程
+// gradle --stop

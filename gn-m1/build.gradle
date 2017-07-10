@@ -17,4 +17,4 @@ dependencies {
     runtime 'javax.servlet:jstl:1.1.2'
 }
 
-apply from: 'demo7.gradle'
+apply from: 'demo0.gradle'
