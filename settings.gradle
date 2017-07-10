@@ -1,3 +1,5 @@
 rootProject.name = 'gradle-note'
 
 include 'gn-m1'
+include 'j2se'
+
